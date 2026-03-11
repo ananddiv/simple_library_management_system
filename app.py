@@ -79,7 +79,8 @@ def get_book(book_id):
     try:
         with connection.cursor() as cursor:
             # Execute a SQL query to retrieve the book details based on the book_id
-            cursor.execute("SELECT * FROM books WHERE book_id = %s", (book_id,))
+            query_book_by_id = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, COUNT(i.inventory_id) AS inventory_count FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE b.book_id = %s GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, p.name"
+            cursor.execute(query_book_by_id, (book_id,))
             # Fetch the book details from the query result and store it in a variable
             book = cursor.fetchone()
     finally:
@@ -138,6 +139,9 @@ def delete_book(book_id):
                 # delete the book if it exists
                 cursor.execute("DELETE FROM books WHERE book_id = %s", (book_id,))
                 connection.commit()
+                # delete the book from inventory if it exists
+                cursor.execute("DELETE FROM inventory WHERE book_id = %s", (book_id,))
+                connection.commit()
                 # return success message after deletion
                 return jsonify({'message': 'Book deleted successfully'}), 200
     finally:
@@ -150,7 +154,7 @@ def update_book(book_id):
     # Get the update data from the request body
     update_data = request.get_json()
     # Only allow updating specific fields
-    allowed_fields = {'title', 'isbn', 'published_year', 'price', 'publisher_id'}
+    allowed_fields = {'title', 'isbn', 'published_year', 'price', 'publisher_id', 'inventory_count'}
     # Filter the update data to include only allowed fields and their corresponding values. This will ensure that only valid fields are updated in the database and prevent any unintended changes to other fields.
     data = {key: value for key, value in update_data.items() if key in allowed_fields}  
     print(data)
