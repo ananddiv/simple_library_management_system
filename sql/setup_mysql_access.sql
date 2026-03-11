@@ -1,3 +1,3 @@
-CREATE USER 'hexagon'@'%' IDENTIFIED BY 'Monday@123';
-GRANT ALL PRIVILEGES ON *.* TO 'hexagon'@'%';
+CREATE USER 'user_name'@'%' IDENTIFIED BY 'Password';
+GRANT ALL PRIVILEGES ON *.* TO 'user_name'@'%';
 FLUSH PRIVILEGES;
