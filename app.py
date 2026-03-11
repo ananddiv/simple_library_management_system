@@ -32,10 +32,11 @@ def display_books():
 
     #Setup the default query.
     #query = "SELECT * FROM books WHERE 1=1" 
-    query = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name as publisher_name FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id WHERE 1=1"
-
+    #query = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name as publisher_name FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id WHERE 1=1"
+    query = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, COUNT(i.inventory_id) AS inventory_count FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE 1=1"
     # Define the list for passing the query parameters. 
     parms = []
+    group_by = " GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, p.name"
 
     if title:
         query += " AND title LIKE %s"
@@ -46,6 +47,9 @@ def display_books():
     if author:
         query += " AND book_id IN (SELECT book_id FROM book_authors WHERE author_id IN (SELECT author_id FROM authors WHERE name LIKE %s))"
         parms.append(f"%{author}%")
+
+    # Add the group by clause to the query if any of the filters are applied. This will ensure that we get the correct count of inventory for each book based on the applied filters.
+    query += group_by
 
     # Add the limit and offset to the query
     query += " LIMIT %s OFFSET %s"
