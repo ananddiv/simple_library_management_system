@@ -101,28 +101,43 @@ def add_book():
     #print(data)
     connection = get_connection()
     resp_message = {}
+    book_added = False
     try:
         with connection.cursor() as cursor:
-            # Insert the new book into the database
-            cursor.execute("INSERT INTO books (title,isbn,published_year,price,publisher_id) VALUES (%s, %s, %s, %s, %s)", 
-                           (data['title'], data['isbn'], data['published_year'], data['price'], data['publisher_id']))
-            # Commit the transaction to save the changes to the database
-            connection.commit()
+            # Check if the book exists before adding
+            query_check_book = "SELECT * FROM books WHERE isbn = %s"
+            cursor.execute(query_check_book, (data.get('isbn'),))
+            book = cursor.fetchone()
+            if not book:
+                # Insert the new book into the book table
+                cursor.execute("INSERT INTO books (title,isbn,published_year,price,publisher_id) VALUES (%s, %s, %s, %s, %s)", 
+                            (data['title'], data['isbn'], data['published_year'], data['price'], data['publisher_id']))
+                # Commit the transaction to save the changes to the database
+                connection.commit()
+                # Add the inventory count for the new book in the inventory table
+                cursor_add_inventory = connection.cursor()
+                cursor_add_inventory.execute("INSERT INTO inventory (book_id, inventory_count) VALUES (%s, %s)", (cursor.lastrowid, data.get('inventory_count', 0)))
+                connection.commit()
+                cursor_add_inventory.close()
+                book_added = True
     finally:
-            try:
-                with connection.cursor() as cursor1:
-                    # Retrieve the newly added book using the last inserted id
-                    cursor1.execute("SELECT * FROM books WHERE book_id = %s", (cursor.lastrowid,))
-                    # Fetch the book details and add a success message to the response
-                    book_added = cursor1.fetchone()
-                    resp_message['message'] = f"Book added successfully with id {cursor.lastrowid}"
-                    resp_message['book'] = book_added
-            finally:       
-                # Close the database connection after the operations are completed 
-                connection.close()
-    # Return the details of the newly added book along with a success message in the response            
-    return jsonify(resp_message), 201
-
+            if book_added:
+                try:
+                    with connection.cursor() as cursor1:
+                        # Retrieve the newly added book using the last inserted id
+                        cursor1.execute("SELECT * FROM books WHERE book_id = %s", (cursor.lastrowid,))
+                        # Fetch the book details and add a success message to the response
+                        book_added = cursor1.fetchone()
+                        resp_message['message'] = f"Book added successfully with id {cursor.lastrowid}"
+                        resp_message['book'] = book_added
+                finally:       
+                        # Close the database connection after the operations are completed 
+                        connection.close()
+                # Return the details of the newly added book along with a success message in the response            
+                return jsonify(resp_message), 201
+            else:
+                # If the book already exists, return a JSON response with a message indicating that the book already exists and set the HTTP status code to 400 (Bad Request) to indicate that the request was invalid due to the duplicate entry.
+                return jsonify({'message': 'Book already exists'}), 400
 # Route to delete book by id
 @app.route('/books/<int:book_id>', methods=['DELETE'])
 def delete_book(book_id):
@@ -199,4 +214,4 @@ def not_found(error):
 
 # Run the Flask application in debug mode on port 5000. This will allow us to see detailed error messages and automatically reload the server when we make changes to
 if __name__ == '__main__':
-    app.run(debug=True, port = 5001)
+    app.run(debug=True, port = 5000)
