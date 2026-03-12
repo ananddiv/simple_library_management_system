@@ -195,7 +195,7 @@ def update_book(book_id):
             connection.close()
 @app.errorhandler(404)
 def not_found(error):
-    return jsonify({'error': 'Resource not found', 'message': 'The requested resource was not found. Valid URLs: /books, /books/<int:book_id>'}), 404
+    return jsonify({'error': 'Resource not found', 'message': 'The requested resource was not found. Valid URLs: /books, /books/<int:book_id>','http_status':404}), 404
 
 # Run the Flask application in debug mode on port 5000. This will allow us to see detailed error messages and automatically reload the server when we make changes to
 if __name__ == '__main__':
