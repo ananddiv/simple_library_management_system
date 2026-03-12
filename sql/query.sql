@@ -23,15 +23,15 @@ DELETE FROM books WHERE book_id = 106;
 -- Delete the inventory records associated with the book being deleted
 DELETE FROM inventory WHERE book_id = 106;
 
--- Update query to update a book - using the POST method in the API
-UPDATE books SET {set_clause} WHERE book_id = %s;
+-- Update query to update a book - using the POST method in the API - PATCH query
+UPDATE books SET title = "Hello World" WHERE book_id = %s;
 
-
+-- Select a book by its ISBN number - using the GET method in the API - GET book by <book_id>
 select * from books where isbn =22;
-
+-- Select the inventory details for a book by its ID - using the GET method in the API
 select * from inventory where book_id = 173;
 
 -- Insert a new book into the database - using the POST method in the API
 INSERT INTO books (title,isbn,published_year,price,publisher_id) VALUES ("Introduction to Algorithms", "123-456-789", "2009","12.96", "4")
-
+-- Insert a new book into the inventory database.
 INSERT INTO inventory (book_id, quantity, location) VALUES (LAST_INSERT_ID(), 4, 'Main')
