@@ -97,8 +97,11 @@ def get_book(book_id):
 @app.route('/books', methods=['POST'])
 def add_book():
     # Get the book details from the request body
-    data = request.get_json()
-    #print(data)
+    inp_data = request.get_json()
+    if type(inp_data) == list:
+        data = inp_data[0]
+    else:
+        data = inp_data
     connection = get_connection()
     resp_message = {}
     book_added = False
@@ -106,6 +109,7 @@ def add_book():
         with connection.cursor() as cursor:
             # Check if the book exists before adding
             query_check_book = "SELECT * FROM books WHERE isbn = %s"
+            isb = data.get('isbn')
             cursor.execute(query_check_book, (data.get('isbn'),))
             book = cursor.fetchone()
             if not book:
@@ -116,7 +120,7 @@ def add_book():
                 connection.commit()
                 # Add the inventory count for the new book in the inventory table
                 cursor_add_inventory = connection.cursor()
-                cursor_add_inventory.execute("INSERT INTO inventory (book_id, inventory_count) VALUES (%s, %s)", (cursor.lastrowid, data.get('inventory_count', 0)))
+                cursor_add_inventory.execute("INSERT INTO inventory (book_id, quantity, location) VALUES (%s, %s, %s)", (cursor.lastrowid, data.get('inventory_count', 0), data.get('location', 'Main')))
                 connection.commit()
                 cursor_add_inventory.close()
                 book_added = True
