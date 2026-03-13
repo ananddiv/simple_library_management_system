@@ -35,3 +35,7 @@ select * from inventory where book_id = 173;
 INSERT INTO books (title,isbn,published_year,price,publisher_id) VALUES ("Introduction to Algorithms", "123-456-789", "2009","12.96", "4")
 -- Insert a new book into the inventory database.
 INSERT INTO inventory (book_id, quantity, location) VALUES (LAST_INSERT_ID(), 4, 'Main')
+
+delete FROM inventory WHERE book_id = 178;
+
+select * from inventory where book_id = 178;

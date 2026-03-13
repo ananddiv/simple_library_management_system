@@ -33,7 +33,7 @@ def display_books():
     #Setup the default query.
     #query = "SELECT * FROM books WHERE 1=1" 
     #query = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name as publisher_name FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id WHERE 1=1"
-    query = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, COUNT(i.inventory_id) AS inventory_count FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE 1=1"
+    query = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, sum(i.quantity) AS inventory_count FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE 1=1"
     # Define the list for passing the query parameters. 
     parms = []
     group_by = " GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, p.name"
@@ -79,7 +79,7 @@ def get_book(book_id):
     try:
         with connection.cursor() as cursor:
             # Execute a SQL query to retrieve the book details based on the book_id
-            query_book_by_id = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, COUNT(i.inventory_id) AS inventory_count FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE b.book_id = %s GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, p.name"
+            query_book_by_id = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, sum(i.quantity) AS inventory_count FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE b.book_id = %s GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, p.name"
             cursor.execute(query_book_by_id, (book_id,))
             # Fetch the book details from the query result and store it in a variable
             book = cursor.fetchone()
@@ -173,11 +173,14 @@ def update_book(book_id):
     # Get the update data from the request body
     update_data = request.get_json()
     # Only allow updating specific fields
-    allowed_fields = {'title', 'isbn', 'published_year', 'price', 'publisher_id', 'inventory_count'}
+    allowed_fields_books = {'title', 'isbn', 'published_year', 'price', 'publisher_id'}
+    allowed_fields_inventory = {'inventory_count', 'location'}
     # Filter the update data to include only allowed fields and their corresponding values. This will ensure that only valid fields are updated in the database and prevent any unintended changes to other fields.
-    data = {key: value for key, value in update_data.items() if key in allowed_fields}  
-    print(data)
-    if not data:
+    data_books = {key: value for key, value in update_data.items() if key in allowed_fields_books}  
+    data_inventory = {key: value for key, value in update_data.items() if key in allowed_fields_inventory}
+    print(data_books)
+    print(data_inventory)
+    if not data_books and not data_inventory:
         # If there are no valid fields to update, return a JSON response with a message indicating that there are no valid fields to update and set the HTTP status code to 400 (Bad Request) to indicate that the request was invalid.
         return jsonify({'message': 'No valid fields to update'}), 400
     else:
@@ -193,17 +196,34 @@ def update_book(book_id):
                     return jsonify({'message': 'Book not found'}), 404
                 else:    
                     # Dynamically build the SQL query based on the fields provided in the update data. This will allow us to update only the specified fields in the database without affecting other fields.
-                    set_clause = ", ".join(f"{key} = %s" for key in data.keys())
-                    values = list(data.values()) + [book_id]
+                    set_clause = ", ".join(f"{key} = %s" for key in data_books.keys())
+                    values = list(data_books.values()) + [book_id]
                     sql_query = f"UPDATE books SET {set_clause} WHERE book_id = %s"
                     #print(sql_query)
                     # Execute the SQL query to update the book details in the database using the dynamically built query and the corresponding values
                     cursor.execute(sql_query, values)
                     # Commit the transaction to save the changes to the database
                     connection.commit()
+                    # If there are inventory-related fields to update, build and execute a separate SQL query to update the inventory details for the book in the database
+                    if data_inventory:
+                        cursor.execute("SELECT count(*) as count FROM inventory WHERE book_id = %s", (book_id,))
+                        inventory = cursor.fetchone()
+                        current_count = inventory['count']
+                        new_count = data_inventory.get('inventory_count', current_count)
+                        if current_count > 0 and new_count == 0:
+                            cursor.execute("DELETE FROM inventory WHERE book_id = %s", (book_id,))
+                        elif current_count == 0 and new_count > 0:
+                            cursor.execute("INSERT INTO inventory (book_id, quantity, location) VALUES (%s, %s, %s)", (book_id, new_count, data_inventory.get('location', 'Main')))
+                        elif current_count > 0 and new_count > 0:
+                            cursor.execute("UPDATE inventory SET quantity = %s, location = %s WHERE book_id = %s", (new_count, data_inventory.get('location', 'Main'), book_id))
+                        connection.commit()
                     resp_message['message'] = 'Book updated successfully'
-                    cursor.execute("SELECT * FROM books WHERE book_id = %s", (book_id,))
+                    #cursor.execute("SELECT * FROM books WHERE book_id = %s", (book_id,))
                     book = cursor.fetchone()
+                    query_book_by_id = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, sum(i.quantity) AS inventory_count FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE b.book_id = %s GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, p.name"
+                    cursor.execute(query_book_by_id, (book_id,))
+                    book = cursor.fetchone()
+
                     if not book:
                       # return not found message if book does not exist
                       return jsonify({'message': 'Book not found'}), 404
@@ -218,4 +238,4 @@ def not_found(error):
 
 # Run the Flask application in debug mode on port 5000. This will allow us to see detailed error messages and automatically reload the server when we make changes to
 if __name__ == '__main__':
-    app.run(debug=True, port = 5000)
+    app.run(debug=True, port = 5001)
