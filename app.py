@@ -33,33 +33,35 @@ def display_books():
     #Setup the default query.
     #query = "SELECT * FROM books WHERE 1=1" 
     #query = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name as publisher_name FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id WHERE 1=1"
-    query = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, sum(i.quantity) AS inventory_count FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE 1=1"
+    #query = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, sum(i.quantity) AS inventory_count FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE 1=1"
+    base_query = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,concat(a.first_name, ' ', a.last_name) AS author_name,sum(i.quantity) AS inventory_count FROM books b LEFT JOIN book_author ba ON b.book_id = ba.book_id LEFT JOIN authors a ON ba.author_id = a.author_id LEFT JOIN publishers p  ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE 1=1 "
     # Define the list for passing the query parameters. 
     parms = []
-    group_by = " GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, p.name"
+    group_by = " GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, author_name"
 
     if title:
-        query += " AND title LIKE %s"
+        base_query += " AND title LIKE %s"
         parms.append(f"%{title}%")
     if published_year:
-        query += " AND published_year = %s"
+        base_query += " AND published_year = %s"
         parms.append(published_year)
     if author:
-        query += " AND book_id IN (SELECT book_id FROM book_authors WHERE author_id IN (SELECT author_id FROM authors WHERE name LIKE %s))"
+        base_query += " AND first_name LIKE %s or last_name LIKE %s"
+        parms.append(f"%{author}%")
         parms.append(f"%{author}%")
 
     # Add the group by clause to the query if any of the filters are applied. This will ensure that we get the correct count of inventory for each book based on the applied filters.
-    query += group_by
+    base_query += group_by
 
     # Add the limit and offset to the query
-    query += " LIMIT %s OFFSET %s"
+    base_query += " LIMIT %s OFFSET %s"
     parms.extend([limit, offset])
     # Get all books from the database and return them as a JSON response
     connection = get_connection()
     try:
         with connection.cursor() as cursor:
             # Execute a SQL query to retrieve all books from the database and store the results in a variable
-            cursor.execute(query, tuple(parms))
+            cursor.execute(base_query, tuple(parms))
             # Fetch all the books from the query result and store them in a variable. This will allow us to return the list of books as a JSON response to the client.
             books = cursor.fetchall()
     finally:
@@ -79,7 +81,8 @@ def get_book(book_id):
     try:
         with connection.cursor() as cursor:
             # Execute a SQL query to retrieve the book details based on the book_id
-            query_book_by_id = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, sum(i.quantity) AS inventory_count FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE b.book_id = %s GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, p.name"
+            #query_book_by_id = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, sum(i.quantity) AS inventory_count FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE b.book_id = %s GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, p.name"
+            query_book_by_id = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,concat(a.first_name, ' ', a.last_name) AS author_name,sum(i.quantity) AS inventory_count FROM books b LEFT JOIN book_author ba ON b.book_id = ba.book_id LEFT JOIN authors a ON ba.author_id = a.author_id LEFT JOIN publishers p  ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE b.book_id = %s GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, author_name"
             cursor.execute(query_book_by_id, (book_id,))
             # Fetch the book details from the query result and store it in a variable
             book = cursor.fetchone()
@@ -117,10 +120,25 @@ def add_book():
                 cursor.execute("INSERT INTO books (title,isbn,published_year,price,publisher_id) VALUES (%s, %s, %s, %s, %s)", 
                             (data['title'], data['isbn'], data['published_year'], data['price'], data['publisher_id']))
                 # Commit the transaction to save the changes to the database
-                connection.commit()
+                #connection.commit()
                 # Add the inventory count for the new book in the inventory table
                 cursor_add_inventory = connection.cursor()
                 cursor_add_inventory.execute("INSERT INTO inventory (book_id, quantity, location) VALUES (%s, %s, %s)", (cursor.lastrowid, data.get('inventory_count', 0), data.get('location', 'Main')))
+                
+                # Add associated authors for the new book in the book_author table
+                authors = data.get('authors', [])
+                # Find the author ids for the given author names and insert into book_author table
+                for author_name in authors:
+                    first_name, last_name = author_name.split(' ', 1)
+                    cursor_add_inventory.execute("SELECT author_id FROM authors WHERE first_name = %s AND last_name = %s", (first_name, last_name))
+                    author = cursor_add_inventory.fetchone()
+                    if author:
+                        author_id = author['author_id']
+                    else:
+                        cursor_add_inventory.execute("INSERT INTO authors (first_name, last_name) VALUES (%s, %s)", (first_name, last_name))
+                        author_id = cursor_add_inventory.lastrowid
+                    cursor_add_inventory.execute("INSERT INTO book_author (book_id, author_id) VALUES (%s, %s)", (cursor.lastrowid, author_id))
+                # Commit the transaction to save the changes to the database
                 connection.commit()
                 cursor_add_inventory.close()
                 book_added = True
@@ -129,7 +147,8 @@ def add_book():
                 try:
                     with connection.cursor() as cursor1:
                         # Retrieve the newly added book using the last inserted id
-                        cursor1.execute("SELECT * FROM books WHERE book_id = %s", (cursor.lastrowid,))
+                        query_book_by_id = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,concat(a.first_name, ' ', a.last_name) AS author_name,sum(i.quantity) AS inventory_count FROM books b LEFT JOIN book_author ba ON b.book_id = ba.book_id LEFT JOIN authors a ON ba.author_id = a.author_id LEFT JOIN publishers p  ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE b.book_id = %s GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, author_name"
+                        cursor1.execute(query_book_by_id, (cursor.lastrowid,))
                         # Fetch the book details and add a success message to the response
                         book_added = cursor1.fetchone()
                         resp_message['message'] = f"Book added successfully with id {cursor.lastrowid}"

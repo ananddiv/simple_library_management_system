@@ -1,22 +1,85 @@
 USE wizard_books;
 
 -- select all the books with their publisher names using left join
-SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, COUNT(i.inventory_id) AS inventory_count FROM books b
+SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,concat(a.first_name, ' ', a.last_name) AS author_name,
+ sum(i.quantity) AS inventory_count FROM books b
+LEFT JOIN book_author ba
+ON b.book_id = ba.book_id
+LEFT JOIN authors a
+ON ba.author_id = a.author_id
 LEFT JOIN publishers p 
 ON b.publisher_id = p.publisher_id
 LEFT JOIN inventory i
 ON b.book_id = i.book_id
-WHERE 1=1
-GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, p.name;
+WHERE 
+1=1 
+GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, author_name;
 
 -- Select a single book by its ID - using the GET method in the API
-SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, COUNT(i.inventory_id) AS inventory_count FROM books b
+SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,concat(a.first_name, ' ', a.last_name) AS author_name,
+ sum(i.quantity) AS inventory_count FROM books b
+LEFT JOIN book_author ba
+ON b.book_id = ba.book_id
+LEFT JOIN authors a
+ON ba.author_id = a.author_id
 LEFT JOIN publishers p 
 ON b.publisher_id = p.publisher_id
 LEFT JOIN inventory i
 ON b.book_id = i.book_id
-WHERE b.book_id = 106
-GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, p.name;
+WHERE 
+1=1 
+AND b.book_id = 106
+GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, author_name;
+
+
+-- Select a book by title - using the GET method in the API - GET book by <title>
+SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,concat(a.first_name, ' ', a.last_name) AS author_name,
+ sum(i.quantity) AS inventory_count FROM books b
+LEFT JOIN book_author ba
+ON b.book_id = ba.book_id
+LEFT JOIN authors a
+ON ba.author_id = a.author_id
+LEFT JOIN publishers p 
+ON b.publisher_id = p.publisher_id
+LEFT JOIN inventory i
+ON b.book_id = i.book_id
+WHERE 
+1=1 
+AND b.title like "%Algorithms%"
+GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, author_name;
+
+-- Select all books published in a specific year - using the GET method in the API - GET books by <published_year>
+SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,concat(a.first_name, ' ', a.last_name) AS author_name,
+ sum(i.quantity) AS inventory_count FROM books b
+LEFT JOIN book_author ba
+ON b.book_id = ba.book_id
+LEFT JOIN authors a
+ON ba.author_id = a.author_id
+LEFT JOIN publishers p 
+ON b.publisher_id = p.publisher_id
+LEFT JOIN inventory i
+ON b.book_id = i.book_id
+WHERE 
+1=1 
+AND b.published_year = 2009
+GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, author_name;
+
+
+-- Select all books by author name - using the GET method in the API - GET books by <author_name>
+SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,concat(a.first_name, ' ', a.last_name) AS author_name,
+ sum(i.quantity) AS inventory_count FROM books b
+LEFT JOIN book_author ba
+ON b.book_id = ba.book_id
+LEFT JOIN authors a
+ON ba.author_id = a.author_id
+LEFT JOIN publishers p 
+ON b.publisher_id = p.publisher_id
+LEFT JOIN inventory i
+ON b.book_id = i.book_id
+WHERE 
+1=1 
+AND a.first_name like "%Thomas H.%" or a.last_name like  "%Cormen%"
+GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, author_name;       
 
 --Delete a book from the database - using the DELETE method in the API
 DELETE FROM books WHERE book_id = 106;
