@@ -34,10 +34,10 @@ def display_books():
     #query = "SELECT * FROM books WHERE 1=1" 
     #query = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name as publisher_name FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id WHERE 1=1"
     #query = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,p.name AS publisher_name, sum(i.quantity) AS inventory_count FROM books b LEFT JOIN publishers p ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE 1=1"
-    base_query = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,concat(a.first_name, ' ', a.last_name) AS author_name,sum(i.quantity) AS inventory_count FROM books b LEFT JOIN book_author ba ON b.book_id = ba.book_id LEFT JOIN authors a ON ba.author_id = a.author_id LEFT JOIN publishers p  ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE 1=1 "
+    base_query = "SELECT b.book_id,b.title,b.isbn,b.published_year,p.name as publisher_name,b.price,concat(a.first_name, ' ', a.last_name) AS author_name,sum(i.quantity) AS inventory_count FROM books b LEFT JOIN book_author ba ON b.book_id = ba.book_id LEFT JOIN authors a ON ba.author_id = a.author_id LEFT JOIN publishers p  ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE 1=1 "
     # Define the list for passing the query parameters. 
     parms = []
-    group_by = " GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, author_name"
+    group_by = " GROUP BY b.book_id, b.title, b.isbn, b.published_year,p.name, b.price, author_name"
 
     if title:
         base_query += " AND title LIKE %s"
@@ -105,6 +105,12 @@ def add_book():
         data = inp_data[0]
     else:
         data = inp_data
+
+    madatory_attributes = ['title', 'isbn', 'published_year', 'price', 'publisher_id','inventory_count','location','author_name']
+    for attribute in madatory_attributes:
+        if attribute not in data:
+            return jsonify({'message': f'Missing mandatory attribute: {attribute}'}), 400
+        
     connection = get_connection()
     resp_message = {}
     book_added = False
@@ -126,10 +132,15 @@ def add_book():
                 cursor_add_inventory.execute("INSERT INTO inventory (book_id, quantity, location) VALUES (%s, %s, %s)", (cursor.lastrowid, data.get('inventory_count', 0), data.get('location', 'Main')))
                 
                 # Add associated authors for the new book in the book_author table
-                authors = data.get('authors', [])
+                authors = data.get('author_name', [])
                 # Find the author ids for the given author names and insert into book_author table
                 for author_name in authors:
-                    first_name, last_name = author_name.split(' ', 1)
+                    # If author name has a . in it, split by . and take the first part as first name and the second part as last name. This will handle cases where the author name is provided in the format "FirstName.LastName".
+                    if author_name and '.' in author_name:
+                        first_name, last_name = author_name.split('.', 1)
+                        first_name = first_name + '.'
+                    else:
+                        first_name, last_name = author_name.split(' ', 1)
                     cursor_add_inventory.execute("SELECT author_id FROM authors WHERE first_name = %s AND last_name = %s", (first_name, last_name))
                     author = cursor_add_inventory.fetchone()
                     if author:
@@ -147,7 +158,7 @@ def add_book():
                 try:
                     with connection.cursor() as cursor1:
                         # Retrieve the newly added book using the last inserted id
-                        query_book_by_id = "SELECT b.book_id,b.title,b.isbn,b.published_year,b.price,concat(a.first_name, ' ', a.last_name) AS author_name,sum(i.quantity) AS inventory_count FROM books b LEFT JOIN book_author ba ON b.book_id = ba.book_id LEFT JOIN authors a ON ba.author_id = a.author_id LEFT JOIN publishers p  ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE b.book_id = %s GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, author_name"
+                        query_book_by_id = "SELECT b.book_id,b.title,b.isbn,b.published_year,p.name as publisher_name,b.price,concat(a.first_name, ' ', a.last_name) AS author_name,sum(i.quantity) AS inventory_count FROM books b LEFT JOIN book_author ba ON b.book_id = ba.book_id LEFT JOIN authors a ON ba.author_id = a.author_id LEFT JOIN publishers p  ON b.publisher_id = p.publisher_id LEFT JOIN inventory i ON b.book_id = i.book_id WHERE b.book_id = %s GROUP BY b.book_id, b.title, b.isbn, b.published_year, b.price, author_name"
                         cursor1.execute(query_book_by_id, (cursor.lastrowid,))
                         # Fetch the book details and add a success message to the response
                         book_added = cursor1.fetchone()
