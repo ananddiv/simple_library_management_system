@@ -1,0 +1,17 @@
+# Build the docker image
+docker build -t bookwizard-app .
+
+# if using an env file, remove the quotes from the file as docker is not intelligent to remove them.
+
+# inject the .env passwords and run the docker in detached mode
+docker run -d -p 5000:5000 --env-file .env bookwizard-app
+
+# Check if docker is running 
+docker ps 
+
+# Stop the docker 
+docker stop <docker_id>
+
+
+
+

@@ -268,4 +268,4 @@ def not_found(error):
 
 # Run the Flask application in debug mode on port 5000. This will allow us to see detailed error messages and automatically reload the server when we make changes to
 if __name__ == '__main__':
-    app.run(debug=True, port = 5001)
+    app.run(debug=True, port = 5000)
